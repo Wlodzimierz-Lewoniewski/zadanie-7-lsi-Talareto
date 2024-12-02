@@ -45,14 +45,10 @@ def lsi_similarity(n, documents, query, k):
     return similarities
 
 if __name__ == "__main__":
-    n = int(input("Enter the number of documents: "))
-    print("Enter each document on a new line:")
-    documents = [clean_text(input(f"Document {i+1}: ")) for i in range(n)]
-
-    query = clean_text(input("Enter the query: "))
-    k = int(input("Enter the number of dimensions to reduce to (k): "))
+    n = int(input().strip())
+    documents = [clean_text(input().strip()) for _ in range(n)]
+    query = clean_text(input().strip())
+    k = int(input().strip())
 
     similarities = lsi_similarity(n, documents, query, k)
-    print("\nSimilarities between the query and documents:")
-    for i, sim in enumerate(similarities):
-        print(f"Document {i+1}: Similarity Score = {sim}")
+    print(similarities)
