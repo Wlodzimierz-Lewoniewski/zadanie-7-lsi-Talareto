@@ -1,56 +1,69 @@
 import numpy as np
 import re
 
-def preprocess_text(text):
-    text = re.sub(r'[^\w\s]', '', text)
-    text = re.sub(r'\s+', ' ', text)
+def clean_text(text):
+    # Remove punctuation and extra spaces, and convert to lowercase
+    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
     return text.strip().lower()
 
-def lsi_analysis(num_docs, doc_list, search_query, dimensions):
-    vocab = set(word for doc in doc_list + [search_query] for word in doc.split())
-    vocab = sorted(vocab)
-    word_to_index = {word: idx for idx, word in enumerate(vocab)}
+def lsi_similarity(n, documents, query, k):
+    # Tokenization
+    terms = set(word for doc in documents + [query] for word in doc.split())
+    terms = sorted(terms)  # Maintain consistent ordering
+    term_index = {term: i for i, term in enumerate(terms)}
 
-    term_doc_matrix = np.zeros((len(vocab), num_docs), dtype=int)
-    for idx, doc in enumerate(doc_list):
+    # Term-document matrix
+    C = np.zeros((len(terms), n), dtype=int)
+    for j, doc in enumerate(documents):
         for word in doc.split():
-            if word in word_to_index:
-                term_doc_matrix[word_to_index[word], idx] = 1
+            if word in term_index:
+                C[term_index[word], j] = 1
 
-    U, s, Vt = np.linalg.svd(term_doc_matrix, full_matrices=False)
+    # Singular Value Decomposition
+    U, s, Vt = np.linalg.svd(C, full_matrices=False)
 
-    truncated_singular_values = np.copy(s)
-    truncated_singular_values[dimensions:] = 0
-    reduced_S = np.diag(truncated_singular_values)
+    # Reduce dimensions to k
+    sr = np.copy(s)
+    sr[k:] = 0  # Set the smallest singular values to 0
+    Sr = np.diag(sr)
 
-    reduced_matrix = U @ reduced_S @ Vt
+    # Reduced term-document matrix
+    Cr = U.dot(Sr).dot(Vt)
 
-    query_vector = np.zeros(len(vocab), dtype=int)
-    for word in search_query.split():
-        if word in word_to_index:
-            query_vector[word_to_index[word]] = 1
+    # Transform query vector into reduced space
+    q_vec = np.zeros(len(terms), dtype=int)
+    for word in query.split():
+        if word in term_index:
+            q_vec[term_index[word]] = 1
 
-    reduced_query_vector = np.linalg.inv(reduced_S).dot(U.T[:dimensions]).dot(query_vector)
+    # Transform query using reduced dimensions
+    Sk = np.diag(s[:k])
+    UkT = np.take(U.T, range(k), axis=0)
+    qk = np.linalg.inv(Sk).dot(UkT).dot(q_vec)
 
-    reduced_Vt = Vt[:dimensions]
-    doc_vectors = reduced_S @ reduced_Vt.T
+    # Compute cosine similarity between query and documents
+    Vk = np.take(Vt, range(k), axis=0)
+    doc_vectors = Sk.dot(Vk).T
 
-    similarity_scores = []
-    for vector in doc_vectors.T:
-        similarity = np.dot(reduced_query_vector, vector) / (np.linalg.norm(reduced_query_vector) * np.linalg.norm(vector))
-        similarity_scores.append(round(similarity, 2))
+    similarities = []
+    for doc_vec in doc_vectors:
+        cosine_sim = np.dot(qk, doc_vec) / (np.linalg.norm(qk) * np.linalg.norm(doc_vec))
+        similarities.append(round(cosine_sim, 2))
 
-    return similarity_scores
+    return similarities
 
 if __name__ == "__main__":
-    num_docs = int(input("Enter the number of documents: "))
+    # User input
+    n = int(input("Enter the number of documents: "))
     print("Enter each document on a new line:")
-    documents = [preprocess_text(input(f"Document {i+1}: ")) for i in range(num_docs)]
+    documents = [clean_text(input(f"Document {i+1}: ")) for i in range(n)]
 
-    query_text = preprocess_text(input("Enter the query: "))
-    dimension_count = int(input("Enter the number of dimensions to reduce to (k): "))
+    query = clean_text(input("Enter the query: "))
+    k = int(input("Enter the number of dimensions to reduce to (k): "))
 
-    results = lsi_analysis(num_docs, documents, query_text, dimension_count)
-    print("\nDocument Similarities:")
-    for i, score in enumerate(results):
-        print(f"Document {i+1}: {score}")
+    # Calculate similarities
+    similarities = lsi_similarity(n, documents, query, k)
+    print("\nSimilarities:")
+    for i, sim in enumerate(similarities):
+        print(f"Document {i+1}: {sim}")
